@@ -39,6 +39,7 @@ import { DRIVE_KEYS as DRIVE_KEY_LIST, DRIVE_SHORT, driveLevel } from './dimensi
 import { bodyLine, computeVitals, normalizeOffset } from './pulse.js';
 import { NowLines } from './now-lines.js';
 import { STREAM_MAX_CLIENTS, diffEvents } from './state-stream.js';
+import { LostFoundStore } from './lost-found-store.js';
 
 // 情绪 → 记忆：只在开关打开时把此刻情绪坐标交给 OB 做共振排序。
 function emotionForOmbre(state) {
@@ -92,6 +93,7 @@ const dashboardAuth = new DashboardAuth({
 const bridgeQueue = new BridgeQueue(config.bridge.statePath, config.bridge);
 const cabin = new CabinStore(config.cabin.statePath, config.cabin);
 const personality = new PersonalityStore(config.personalityPath);
+const lostFound = config.lostFound.enabled ? new LostFoundStore(config.lostFound.path, config.identity.id) : null;
 const bridgeStreams = new Set();
 await oauth.init();
 let cyclePromise = null;
@@ -1509,6 +1511,9 @@ const server = createServer(async (request, response) => {
           };
         },
         handoffNote: async (note) => saveHandoffNote(note, 'mcp'),
+        lostFoundDeposit: lostFound ? async (input) => lostFound.deposit(input) : null,
+        lostFoundList: lostFound ? async (input) => lostFound.list(input) : null,
+        lostFoundResolve: lostFound ? async (input) => lostFound.resolve(input) : null,
         awareness: async (input) => handleAwareness(input),
         box: async (input) => handleBox(input),
         toolsHide: config.toolsHide,

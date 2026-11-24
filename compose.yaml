@@ -69,6 +69,9 @@ services:
       - OMBRE_MCP_URL=${OMBRE_MCP_URL:-http://ombre-brain:8000/mcp}
       # 同一枚内部令牌供心潮 HTTP API 鉴权和 OB sidecar 反向读取。
       - SERVICE_TOKEN=${DYNAMIC_MIND_TOKEN}
+      - IDENTITY_ID=${IDENTITY_ID:-}
+      - LOST_FOUND_ENABLED=${LOST_FOUND_ENABLED:-false}
+      - LOST_FOUND_PATH=${LOST_FOUND_PATH:-/lost-found/items.json}
     networks:
       - xinchao-nian
     ports:
@@ -80,6 +83,7 @@ services:
       - ombre-buckets:/ombre-buckets:ro
       # 4.0：把配置目录挂进来，改 xinchao/configs/ 里的 interaction-rules.json、attention-rules.json 一分钟内生效，不用重建
       - ./xinchao/configs:/app/configs:ro
+      - xinchao-memory-lost-found:/lost-found
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -107,3 +111,6 @@ networks:
 volumes:
   ombre-buckets:   # OB 记忆数据（config/embeddings/桶）
   xinchao-state:   # 心潮动态状态（state.json/oauth）
+  xinchao-memory-lost-found:
+    external: true
+    name: xinchao-memory-lost-found

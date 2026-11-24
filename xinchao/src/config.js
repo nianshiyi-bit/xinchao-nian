@@ -20,7 +20,15 @@ export function loadConfig() {
   return {
     // 10-26 脉：此刻块里一行心跳、呼吸（src/pulse.js）+ /v1/body；PULSE=0 关
     pulse: { enabled: bool('PULSE', true) },
-    identity: { agentName, notificationRecipient },
+    identity: {
+      agentName,
+      notificationRecipient,
+      id: String(process.env.IDENTITY_ID ?? '').trim().toLowerCase(),
+    },
+    lostFound: {
+      enabled: bool('LOST_FOUND_ENABLED', false),
+      path: process.env.LOST_FOUND_PATH ?? '/lost-found/items.json',
+    },
     port: number('PORT', 18110, 1, 65535),
     serviceToken: process.env.SERVICE_TOKEN ?? '',
     statePath: process.env.STATE_PATH ?? '/app/state/state.json',

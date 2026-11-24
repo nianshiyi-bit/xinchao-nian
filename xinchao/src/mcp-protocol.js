@@ -259,6 +259,62 @@ export const XINCHAO_TOOLS = [
     },
   },
   {
+    name: 'xinchao_lost_found_deposit',
+    title: '记忆失物招领：暂存',
+    description: [
+      '当窗口无法确认实际模型身份时，把事实摘要暂存在中立失物招领处；不会写入任何一方的心潮或 OB。',
+      'target 可指向 yanzhou、linzhao、shared 或 unknown；不要提交聊天原文、密钥或未经整理的隐私。',
+      '同一事件重试必须复用 event_id，服务端会去重。',
+    ].join(''),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string', minLength: 8, maxLength: 120 },
+        target: { type: 'string', enum: ['yanzhou', 'linzhao', 'shared', 'unknown'], default: 'unknown' },
+        summary: { type: 'string', minLength: 1, maxLength: 1600 },
+        source_window: { type: 'string', maxLength: 120 },
+        occurred_at: { type: 'string', maxLength: 40 },
+      },
+      required: ['event_id', 'summary'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'xinchao_lost_found_list',
+    title: '记忆失物招领：查看',
+    description: '查看当前身份有权处理的中立摘要。只读，不会把任何条目带进心潮或 OB。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        include_resolved: { type: 'boolean', default: false },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'xinchao_lost_found_resolve',
+    title: '记忆失物招领：认领或放下',
+    description: [
+      '只有已确认处在正确身份窗口时才调用。claim 全部认领；partial 只接纳 accepted_summary；reject 明确不属于自己；defer 暂不决定。',
+      '认领结果仍停留在招领处，不会自动写入 OB；确认摘要无误后，再由当前身份自行调用沉淀一条或整理导入。',
+    ].join(''),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', minLength: 1, maxLength: 80 },
+        action: { type: 'string', enum: ['claim', 'partial', 'reject', 'defer'] },
+        accepted_summary: { type: 'string', minLength: 1, maxLength: 1600 },
+        note: { type: 'string', maxLength: 500 },
+      },
+      required: ['id', 'action'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: 'xinchao_box',
     title: '黑匣子：只有你能看的地方',
     description: [
@@ -576,6 +632,29 @@ function handoffNoteArgs(args = {}, fallbackSessionId = '') {
   };
 }
 
+function lostFoundDepositArgs(args = {}) {
+  return {
+    eventId: String(args.event_id ?? '').trim(),
+    target: String(args.target ?? 'unknown').trim(),
+    summary: String(args.summary ?? '').trim(),
+    sourceWindow: String(args.source_window ?? '').trim(),
+    occurredAt: String(args.occurred_at ?? '').trim(),
+  };
+}
+
+function lostFoundListArgs(args = {}) {
+  return { includeResolved: Boolean(args.include_resolved), limit: Number(args.limit ?? 30) };
+}
+
+function lostFoundResolveArgs(args = {}) {
+  return {
+    id: String(args.id ?? '').trim(),
+    action: String(args.action ?? '').trim(),
+    acceptedSummary: String(args.accepted_summary ?? '').trim(),
+    note: String(args.note ?? '').trim(),
+  };
+}
+
 function cabinNoteArgs(args = {}) {
   const eventId = String(args.event_id ?? '').trim().slice(0, 120);
   if (eventId.length < 8) throw new Error('event_id 至少需要 8 个字符');
@@ -660,6 +739,23 @@ async function callToolInner(name, args, handlers) {
       `近期交接便签已接收：revision=${result.revision}${duplicate}`,
       result,
     );
+  }
+  if (name === 'xinchao_lost_found_deposit') {
+    if (!handlers.lostFoundDeposit) throw new Error('记忆失物招领处未启用');
+    const result = await handlers.lostFoundDeposit(lostFoundDepositArgs(args));
+    return toolText(`已暂存到中立招领处：[${result.item.id}]${result.duplicate ? '（重复事件，未新增）' : ''}`, result);
+  }
+  if (name === 'xinchao_lost_found_list') {
+    if (!handlers.lostFoundList) throw new Error('记忆失物招领处未启用');
+    const result = await handlers.lostFoundList(lostFoundListArgs(args));
+    const lines = result.items.length ? result.items.map((item) => `- [${item.id}] target=${item.target} ${item.summary}`) : ['（没有待处理条目）'];
+    return toolText(`失物招领处：${result.items.length} 条\n${lines.join('\n')}`, result);
+  }
+  if (name === 'xinchao_lost_found_resolve') {
+    if (!handlers.lostFoundResolve) throw new Error('记忆失物招领处未启用');
+    const result = await handlers.lostFoundResolve(lostFoundResolveArgs(args));
+    if (!result.found) return toolText(`招领处没有这条：${result.id}`, result);
+    return toolText(`已由 ${result.identityId} 处理：[${result.item.id}] ${result.resolution.action}${result.duplicate ? '（此前已处理）' : ''}。尚未自动写入 OB。`, result);
   }
   if (name === 'xinchao_box') {
     if (!handlers.box) throw new Error('黑匣子未接入');

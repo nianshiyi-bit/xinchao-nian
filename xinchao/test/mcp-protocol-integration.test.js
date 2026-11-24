@@ -27,12 +27,32 @@ test('tools/list keeps Xinchao, board and curated OB tools together', async () =
   assert.equal(names.includes('xinchao_pending_create'), false);
   assert.equal(names.includes('xinchao_pending_consumed'), false);
   assert.ok(names.includes('xinchao_personality_reflect'));
+  assert.ok(names.includes('xinchao_lost_found_deposit'));
+  assert.ok(names.includes('xinchao_lost_found_list'));
+  assert.ok(names.includes('xinchao_lost_found_resolve'));
   assert.equal(names.includes('xinchao_pending_hold'), false);
   assert.equal(names.includes('xinchao_pending_drop'), false);
   assert.ok(names.includes('board_post'));
   assert.ok(names.includes('board_read'));
   assert.ok(names.includes('breath'));
   assert.equal(names.includes('purge'), false);
+});
+
+test('lost-found tools route neutral summaries without writing memory', async () => {
+  let deposited;
+  const handlers = {
+    lostFoundDeposit: async (input) => {
+      deposited = input;
+      return { item: { id: 'lf_123', ...input }, duplicate: false, revision: 1 };
+    },
+  };
+  const result = await handleMcpMessage(request('tools/call', {
+    name: 'xinchao_lost_found_deposit',
+    arguments: { event_id: 'event-000001', target: 'unknown', summary: '中立事实摘要' },
+  }), handlers);
+  assert.equal(result.body.result.isError, false);
+  assert.equal(deposited.summary, '中立事实摘要');
+  assert.match(result.body.result.content[0].text, /lf_123/);
 });
 
 test('AI can submit one complete monthly personality reflection through MCP', async () => {
